@@ -6,14 +6,7 @@ my_fiber_body(VALUE arg)
 {
     printf("Fiber: Entering fiber body\n");
 
-    int i;
-    for (i = 0; i < 5; i++)
-    {
-        printf("Fiber: going to yield=%d\n", i);
-
-        VALUE count = INT2FIX(i);
-        rb_fiber_yield(1, &count);
-    }
+    rb_require("./hello.rb");
 
     printf("Fiber: Exiting fiber body\n");
 
