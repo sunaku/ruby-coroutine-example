@@ -16,11 +16,12 @@ my_fiber_body(VALUE arg)
 VALUE
 create_my_fiber(VALUE arg)
 {
-    VALUE fib = rb_fiber_new(my_fiber_body, arg), dump;
+    VALUE fib = rb_fiber_new(my_fiber_body, arg);
 
     printf("create_my_fiber: Created my fiber=");
     fflush(stdout);
-    dump = rb_inspect(fib);
+
+    VALUE dump = rb_inspect(fib);
     rb_io_puts(1, &dump, rb_stdout);
 
     return fib;
@@ -29,11 +30,10 @@ create_my_fiber(VALUE arg)
 VALUE
 resume_my_fiber(VALUE fib)
 {
-    VALUE dump;
-
     printf("resume_my_fiber: Going to resume fiber=");
     fflush(stdout);
-    dump = rb_inspect(fib);
+
+    VALUE dump = rb_inspect(fib);
     rb_io_puts(1, &dump, rb_stdout);
 
     if (RTEST(rb_fiber_alive_p(fib)))
@@ -42,6 +42,7 @@ resume_my_fiber(VALUE fib)
 
         printf("resume_my_fiber: Fiber yielded value=");
         fflush(stdout);
+
         dump = rb_inspect(result);
         rb_io_puts(1, &dump, rb_stdout);
 
@@ -80,6 +81,19 @@ main(int argc, char** argv)
             count = rb_protect(resume_my_fiber, fib, 0);
         }
         while (RTEST(count));
+
+        VALUE err = rb_gv_get("$!");
+        if (RTEST(err))
+        {
+            printf("Main: An exception was raised:\n");
+            fflush(stdout);
+
+            VALUE dump = rb_inspect(err);
+            rb_io_puts(1, &dump, rb_stderr);
+
+            VALUE trace = rb_funcall(err, rb_intern("backtrace"), 0);
+            rb_io_puts(1, &trace, rb_stderr);
+        }
 
         printf("Main: Goodbye!\n");
     }
