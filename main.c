@@ -7,7 +7,7 @@
 static ucontext_t ruby_context;
 static ucontext_t main_context;
 static char ruby_context_stack[SIGSTKSZ];
-static bool ruby_context_finished = false;
+static bool ruby_context_finished;
 
 static void relay_from_main_to_ruby()
 {
@@ -26,12 +26,14 @@ static VALUE relay_from_ruby_to_main(VALUE self)
 
 static VALUE ruby_context_body_require(char* file)
 {
-    int status;
-    VALUE result = rb_protect((VALUE (*)(VALUE))rb_require, (VALUE)file, &status);
+    int error;
+    VALUE result = rb_protect((VALUE (*)(VALUE))rb_require,
+                              (VALUE)file, &error);
 
-    if (status)
+    if (error)
     {
-        printf("rb_require('%s') failed with status=%d\n", file, status);
+        printf("rb_require('%s') failed with status=%d\n",
+               file, error);
 
         VALUE exception = rb_gv_get("$!");
         if (RTEST(exception))
@@ -42,7 +44,8 @@ static VALUE ruby_context_body_require(char* file)
             VALUE inspect = rb_inspect(exception);
             rb_io_puts(1, &inspect, rb_stderr);
 
-            VALUE backtrace = rb_funcall(exception, rb_intern("backtrace"), 0);
+            VALUE backtrace = rb_funcall(
+                exception, rb_intern("backtrace"), 0);
             rb_io_puts(1, &backtrace, rb_stderr);
         }
     }
@@ -61,11 +64,15 @@ static void ruby_context_body()
         relay_from_ruby_to_main(Qnil);
     }
 
+
+    /* run the "hello world" Ruby script */
     printf("Ruby: require 'hello' begin\n");
     ruby_context_body_require("./hello.rb");
     printf("Ruby: require 'hello' end\n");
 
+
     printf("Ruby: context end\n");
+
     ruby_context_finished = true;
     relay_from_ruby_to_main(Qnil);
 }
@@ -81,7 +88,8 @@ int main(int argc, char** argv)
         ruby_init_loadpath();
 
         /* allow Ruby script to relay */
-        rb_define_module_function(rb_mKernel, "relay_from_ruby_to_main", relay_from_ruby_to_main, 0);
+        rb_define_module_function(rb_mKernel, "relay_from_ruby_to_main",
+                                  relay_from_ruby_to_main, 0);
 
         /* initialize Ruby context */
         ruby_context.uc_link          = &main_context;
