@@ -1,98 +1,96 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <sys/ucontext.h>
 #include <ruby.h>
 
-VALUE
-my_fiber_body(VALUE arg)
+static ucontext_t ruby_context;
+static ucontext_t main_context;
+static char ruby_context_stack[SIGSTKSZ];
+static bool ruby_context_finished = false;
+
+static void relay_from_main_to_ruby()
 {
-    printf("Fiber: Entering fiber body\n");
-
-    rb_require("./hello.rb");
-
-    printf("Fiber: Exiting fiber body\n");
-
-    return Qtrue;
+    printf("Main: relay_from_main_to_ruby() begin\n");
+    swapcontext(&main_context, &ruby_context);
+    printf("Main: relay_from_main_to_ruby() end\n");
 }
 
-VALUE
-create_my_fiber(VALUE arg)
+static void relay_from_ruby_to_main()
 {
-    VALUE fib = rb_fiber_new(my_fiber_body, arg);
-
-    printf("create_my_fiber: Created my fiber=");
-    fflush(stdout);
-
-    VALUE dump = rb_inspect(fib);
-    rb_io_puts(1, &dump, rb_stdout);
-
-    return fib;
+    printf("Ruby: relay_from_ruby_to_main() begin\n");
+    swapcontext(&ruby_context, &main_context);
+    printf("Ruby: relay_from_ruby_to_main() end\n");
 }
 
-VALUE
-resume_my_fiber(VALUE fib)
+static VALUE ruby_context_body_require(char* file)
 {
-    printf("resume_my_fiber: Going to resume fiber=");
-    fflush(stdout);
+    int status;
+    VALUE result = rb_protect((VALUE (*)(VALUE))rb_require, (VALUE)file, &status);
 
-    VALUE dump = rb_inspect(fib);
-    rb_io_puts(1, &dump, rb_stdout);
-
-    if (RTEST(rb_fiber_alive_p(fib)))
+    if (status)
     {
-        VALUE result = rb_fiber_resume(fib, 0, 0);
+        printf("rb_require('%s') failed with status=%d\n", file, status);
 
-        printf("resume_my_fiber: Fiber yielded value=");
-        fflush(stdout);
+        VALUE exception = rb_gv_get("$!");
+        if (RTEST(exception))
+        {
+            printf("... because an exception was raised:\n");
+            fflush(stdout);
 
-        dump = rb_inspect(result);
-        rb_io_puts(1, &dump, rb_stdout);
+            VALUE inspect = rb_inspect(exception);
+            rb_io_puts(1, &inspect, rb_stderr);
 
-        return result;
+            VALUE backtrace = rb_funcall(exception, rb_intern("backtrace"), 0);
+            rb_io_puts(1, &backtrace, rb_stderr);
+        }
     }
-    else
+
+    return result;
+}
+
+static void ruby_context_body()
+{
+    printf("Ruby: context begin\n");
+
+    int i;
+    for (i = 0; i < 3; i++)
     {
-        printf("resume_my_fiber: Fiber is dead! cannot resume\n");
-        return Qfalse;
+        printf("Ruby: relay %d\n", i);
+        relay_from_ruby_to_main();
     }
+
+    printf("Ruby: require 'hello' begin\n");
+    ruby_context_body_require("./hello.rb");
+    printf("Ruby: require 'hello' end\n");
+
+    printf("Ruby: context end\n");
+    ruby_context_finished = true;
+    relay_from_ruby_to_main();
 }
 
 RUBY_GLOBAL_SETUP
 
-int
-main(int argc, char** argv)
+int main(int argc, char** argv)
 {
     ruby_sysinit(&argc, &argv);
     {
         RUBY_INIT_STACK;
         ruby_init();
+        ruby_init_loadpath();
 
-        VALUE fib = rb_protect(create_my_fiber, Qnil, 0);
+        /* initialize Ruby context */
+        ruby_context.uc_link          = &main_context;
+        ruby_context.uc_stack.ss_sp   = ruby_context_stack;
+        ruby_context.uc_stack.ss_size = sizeof(ruby_context_stack);
+        getcontext(&ruby_context);
+        makecontext(&ruby_context, (void (*)(void)) ruby_context_body, 0);
 
-        printf("Main: Outside rb_protect()\n");
-        /*
-            NOTE: If I resume the fiber out here, then a segfault occurs.
-                  Is this because rb_protect() provides a running thread?
-        */
-
-        printf("Main: Going to resume fiber many times...\n");
-
-        VALUE count;
-        do
+        /* relay control to Ruby until it is finished */
+        ruby_context_finished = false;
+        while (!ruby_context_finished)
         {
-            count = rb_protect(resume_my_fiber, fib, 0);
-        }
-        while (RTEST(count));
-
-        VALUE err = rb_gv_get("$!");
-        if (RTEST(err))
-        {
-            printf("Main: An exception was raised:\n");
-            fflush(stdout);
-
-            VALUE dump = rb_inspect(err);
-            rb_io_puts(1, &dump, rb_stderr);
-
-            VALUE trace = rb_funcall(err, rb_intern("backtrace"), 0);
-            rb_io_puts(1, &trace, rb_stderr);
+            relay_from_main_to_ruby();
         }
 
         printf("Main: Goodbye!\n");
