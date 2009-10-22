@@ -16,11 +16,12 @@ static void relay_from_main_to_ruby()
     printf("Main: relay_from_main_to_ruby() end\n");
 }
 
-static void relay_from_ruby_to_main()
+static VALUE relay_from_ruby_to_main(VALUE self)
 {
     printf("Ruby: relay_from_ruby_to_main() begin\n");
     swapcontext(&ruby_context, &main_context);
     printf("Ruby: relay_from_ruby_to_main() end\n");
+    return Qnil;
 }
 
 static VALUE ruby_context_body_require(char* file)
@@ -57,7 +58,7 @@ static void ruby_context_body()
     for (i = 0; i < 3; i++)
     {
         printf("Ruby: relay %d\n", i);
-        relay_from_ruby_to_main();
+        relay_from_ruby_to_main(Qnil);
     }
 
     printf("Ruby: require 'hello' begin\n");
@@ -66,7 +67,7 @@ static void ruby_context_body()
 
     printf("Ruby: context end\n");
     ruby_context_finished = true;
-    relay_from_ruby_to_main();
+    relay_from_ruby_to_main(Qnil);
 }
 
 RUBY_GLOBAL_SETUP
@@ -78,6 +79,9 @@ int main(int argc, char** argv)
         RUBY_INIT_STACK;
         ruby_init();
         ruby_init_loadpath();
+
+        /* allow Ruby script to relay */
+        rb_define_module_function(rb_mKernel, "relay_from_ruby_to_main", relay_from_ruby_to_main, 0);
 
         /* initialize Ruby context */
         ruby_context.uc_link          = &main_context;
