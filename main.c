@@ -19,16 +19,16 @@ static bool ruby_context_finished;
 
 static void relay_from_main_to_ruby()
 {
-    printf("Main: relay_from_main_to_ruby() begin\n");
+    printf("Relay: main => ruby\n");
     swapcontext(&main_context, &ruby_context);
-    printf("Main: relay_from_main_to_ruby() end\n");
+    printf("Relay: main <= ruby\n");
 }
 
 static VALUE relay_from_ruby_to_main(VALUE self)
 {
-    printf("Ruby: relay_from_ruby_to_main() begin\n");
+    printf("Relay: ruby => main\n");
     swapcontext(&ruby_context, &main_context);
-    printf("Ruby: relay_from_ruby_to_main() end\n");
+    printf("Relay: ruby <= main\n");
     return Qnil;
 }
 
@@ -63,35 +63,20 @@ static VALUE ruby_context_body_require(char* file)
 
 static void ruby_context_body()
 {
-    printf("Ruby: context begin\n");
+    printf("Context: begin\n");
 
     int i;
-    for (i = 0; i < 3; i++)
+    for (i = 0; i < 2; i++)
     {
-        printf("Ruby: relay %d\n", i);
+        printf("Context: relay %d\n", i);
         relay_from_ruby_to_main(Qnil);
     }
 
+    printf("Context: Ruby begin\n");
 
-    /* run the "hello world" Ruby script */
-    printf("Ruby: require 'hello' begin\n");
-    ruby_context_body_require("./hello.rb");
-    printf("Ruby: require 'hello' end\n");
-
-
-    printf("Ruby: context end\n");
-
-    ruby_context_finished = true;
-    relay_from_ruby_to_main(Qnil);
-}
-
-#ifdef RUBY_GLOBAL_SETUP
-RUBY_GLOBAL_SETUP
-#endif
-
-int main(int argc, char** argv)
-{
     #ifdef HAVE_RUBY_SYSINIT
+    int argc = 0;
+    char** argv = {""};
     ruby_sysinit(&argc, &argv);
     #endif
     {
@@ -103,22 +88,41 @@ int main(int argc, char** argv)
         rb_define_module_function(rb_mKernel, "relay_from_ruby_to_main",
                                   relay_from_ruby_to_main, 0);
 
-        /* initialize Ruby context */
-        ruby_context.uc_link          = &main_context;
-        ruby_context.uc_stack.ss_sp   = ruby_context_stack;
-        ruby_context.uc_stack.ss_size = sizeof(ruby_context_stack);
-        getcontext(&ruby_context);
-        makecontext(&ruby_context, (void (*)(void)) ruby_context_body, 0);
+        /* run the "hello world" Ruby script */
+        printf("Ruby: require 'hello' begin\n");
+        ruby_context_body_require("./hello.rb");
+        printf("Ruby: require 'hello' end\n");
 
-        /* relay control to Ruby until it is finished */
-        ruby_context_finished = false;
-        while (!ruby_context_finished)
-        {
-            relay_from_main_to_ruby();
-        }
-
-        printf("Main: Goodbye!\n");
+        ruby_cleanup(0);
     }
 
-    return ruby_cleanup(0);
+    printf("Context: Ruby end\n");
+
+    printf("Context: end\n");
+
+    ruby_context_finished = true;
+    relay_from_ruby_to_main(Qnil);
+}
+
+#ifdef RUBY_GLOBAL_SETUP
+RUBY_GLOBAL_SETUP
+#endif
+
+main()
+{
+    /* initialize Ruby context */
+    ruby_context.uc_link          = &main_context;
+    ruby_context.uc_stack.ss_sp   = ruby_context_stack;
+    ruby_context.uc_stack.ss_size = sizeof(ruby_context_stack);
+    getcontext(&ruby_context);
+    makecontext(&ruby_context, (void (*)(void)) ruby_context_body, 0);
+
+    /* relay control to Ruby until it is finished */
+    ruby_context_finished = false;
+    while (!ruby_context_finished)
+    {
+        relay_from_main_to_ruby();
+    }
+
+    printf("Main: Goodbye!\n");
 }
