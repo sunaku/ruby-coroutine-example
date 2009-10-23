@@ -77,11 +77,15 @@ static void ruby_context_body()
     relay_from_ruby_to_main(Qnil);
 }
 
+#ifdef RUBY_GLOBAL_SETUP
 RUBY_GLOBAL_SETUP
+#endif
 
 int main(int argc, char** argv)
 {
+    #ifdef HAVE_RUBY_SYSINIT
     ruby_sysinit(&argc, &argv);
+    #endif
     {
         RUBY_INIT_STACK;
         ruby_init();
