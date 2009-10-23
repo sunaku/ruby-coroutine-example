@@ -1,7 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#ifdef HAVE_SYS_UCONTEXT_H
 #include <sys/ucontext.h>
+#endif
+
+#ifdef HAVE_CONTEXT_H
+#include <ucontext.h>
+#endif
+
 #include <ruby.h>
 
 static ucontext_t ruby_context;
