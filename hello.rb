@@ -5,3 +5,4 @@ relay_from_ruby_to_main
 puts "~~~~> OMG, back from main!! :-)"
 
 require 'date' # <== HERE IS THE PROBLEM
+p Date.today
