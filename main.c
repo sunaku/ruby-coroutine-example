@@ -14,7 +14,7 @@
 
 static ucontext_t ruby_context;
 static ucontext_t main_context;
-static char ruby_context_stack[SIGSTKSZ];
+static char ruby_context_stack[4*(1024*1024)]; // 4 MiB
 static bool ruby_context_finished;
 
 static void relay_from_main_to_ruby()
