@@ -4,10 +4,10 @@ puts "~~~~> Doing relay from #{__FILE__}:#{__LINE__}"
 relay_from_ruby_to_main
 puts "~~~~> OMG, back from main!! :-)"
 
-require 'date' # <== HERE IS THE PROBLEM
+require 'date'
 p Date.today
 
-require 'fileutils' # <== HERE IS THE PROBLEM
+require 'fileutils'
 p FileUtils
 include FileUtils::Verbose
 touch 'foobar'

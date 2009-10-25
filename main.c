@@ -12,8 +12,9 @@
 
 #include <ruby.h>
 
-static ucontext_t ruby_context;
 static ucontext_t main_context;
+static ucontext_t ruby_context;
+static size_t ruby_context_stack_size;
 static char ruby_context_stack[4*(1024*1024)]; // 4 MiB
 static bool ruby_context_finished;
 
@@ -32,7 +33,7 @@ static VALUE relay_from_ruby_to_main(VALUE self)
     return Qnil;
 }
 
-static VALUE ruby_context_body_require(char* file)
+static VALUE ruby_context_body_require(const char* file)
 {
     int error;
     VALUE result = rb_protect((VALUE (*)(VALUE))rb_require,
@@ -82,10 +83,8 @@ static void ruby_context_body()
     {
         #ifdef HAVE_RUBY_BIND_STACK
         ruby_bind_stack(
-            /* lower address */
-            ruby_context.uc_stack.ss_sp,
-            /* upper address */
-            ruby_context.uc_stack.ss_sp + ruby_context.uc_stack.ss_size
+            (VALUE*)(ruby_context_stack),                          /* lower */
+            (VALUE*)(ruby_context_stack + ruby_context_stack_size) /* upper */
         );
         #endif
 
@@ -117,12 +116,14 @@ static void ruby_context_body()
 RUBY_GLOBAL_SETUP
 #endif
 
-main()
+int main()
 {
-    /* initialize Ruby context */
+    /* create System V context to house Ruby */
+    ruby_context_stack_size = sizeof(ruby_context_stack);
+
     ruby_context.uc_link          = &main_context;
     ruby_context.uc_stack.ss_sp   = ruby_context_stack;
-    ruby_context.uc_stack.ss_size = sizeof(ruby_context_stack);
+    ruby_context.uc_stack.ss_size = ruby_context_stack_size;
     getcontext(&ruby_context);
     makecontext(&ruby_context, (void (*)(void)) ruby_context_body, 0);
 
@@ -134,4 +135,5 @@ main()
     }
 
     printf("Main: Goodbye!\n");
+    return 0;
 }
