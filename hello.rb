@@ -6,3 +6,10 @@ puts "~~~~> OMG, back from main!! :-)"
 
 require 'date' # <== HERE IS THE PROBLEM
 p Date.today
+
+require 'fileutils' # <== HERE IS THE PROBLEM
+p FileUtils
+include FileUtils::Verbose
+touch 'foobar'
+
+puts 'GOOD JOB! :-)'
