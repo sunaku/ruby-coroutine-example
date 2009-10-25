@@ -80,6 +80,15 @@ static void ruby_context_body()
     ruby_sysinit(&argc, &argv);
     #endif
     {
+        #ifdef HAVE_RUBY_BIND_STACK
+        ruby_bind_stack(
+            /* lower address */
+            ruby_context.uc_stack.ss_sp,
+            /* upper address */
+            ruby_context.uc_stack.ss_sp + ruby_context.uc_stack.ss_size
+        );
+        #endif
+
         RUBY_INIT_STACK;
         ruby_init();
         ruby_init_loadpath();
