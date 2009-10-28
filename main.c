@@ -15,21 +15,41 @@
 static ucontext_t main_context;
 static ucontext_t ruby_context;
 static size_t ruby_context_stack_size;
-static char ruby_context_stack[4*(1024*1024)]; // 4 MiB
+static char ruby_context_stack[32*1024]; // 32 KiB is enough for 1.9
 static bool ruby_context_finished;
+
+static size_t detect_stack_watermark()
+{
+    char* stack_end = ruby_context_stack;
+    char* stack_start = stack_end + ruby_context_stack_size;
+
+    while (stack_end <= stack_start)
+    {
+        if (*stack_end != 0)
+        {
+            return stack_start - stack_end;
+        }
+
+        stack_end++;
+    }
+
+    return 0;
+}
 
 static void relay_from_main_to_ruby()
 {
-    printf("Relay: main => ruby\n");
+    char dummy;
+    printf("Relay: main => ruby   stack=%p\n", &dummy); fflush(stdout);
     swapcontext(&main_context, &ruby_context);
-    printf("Relay: main <= ruby\n");
+    printf("Relay: main <= ruby\n"); fflush(stdout);
 }
 
 static VALUE relay_from_ruby_to_main(VALUE self)
 {
-    printf("Relay: ruby => main\n");
+    char dummy;
+    printf("Relay: ruby => main   stack=%p\n", &dummy); fflush(stdout);
     swapcontext(&ruby_context, &main_context);
-    printf("Relay: ruby <= main\n");
+    printf("Relay: ruby <= main\n"); fflush(stdout);
     return Qnil;
 }
 
@@ -75,10 +95,17 @@ static void ruby_context_body()
 
     printf("Context: Ruby begin\n");
 
+    printf("Context: stack used = %lu\n", detect_stack_watermark());
+
     #ifdef HAVE_RUBY_SYSINIT
-    int argc = 0;
-    char** argv = {""};
+    int argc = 4;
+    char** argv = malloc(sizeof(char*) * argc);
+    argv[0] = "-v";
+    argv[1] = "-w";
+    argv[2] = "hello.rb";
+    argv[3] = "whuzza";
     ruby_sysinit(&argc, &argv);
+    printf("Context: after ruby_sysinit(), stack used = %lu\n", detect_stack_watermark());
     #endif
     {
         #ifdef HAVE_RUBY_BIND_STACK
@@ -89,19 +116,27 @@ static void ruby_context_body()
         #endif
 
         RUBY_INIT_STACK;
+        printf("Context: RUBY_INIT_STACK stack used = %lu\n", detect_stack_watermark());
         ruby_init();
+        printf("Context: ruby_init() stack used = %lu\n", detect_stack_watermark());
         ruby_init_loadpath();
+        printf("Context: ruby_init_loadpath() stack used = %lu\n", detect_stack_watermark());
 
         /* allow Ruby script to relay */
         rb_define_module_function(rb_mKernel, "relay_from_ruby_to_main",
                                   relay_from_ruby_to_main, 0);
+        printf("Context: rb_define_module_function() stack used = %lu\n", detect_stack_watermark());
 
         /* run the "hello world" Ruby script */
         printf("Ruby: require 'hello' begin\n");
         ruby_context_body_require("./hello.rb");
         printf("Ruby: require 'hello' end\n");
 
+        // ruby_run_node(ruby_options(argc, argv));
+        printf("Context: ruby_run_node() stack used = %lu\n", detect_stack_watermark());
         ruby_cleanup(0);
+
+        printf("Context: ruby_cleanup() stack used = %lu\n", detect_stack_watermark());
     }
 
     printf("Context: Ruby end\n");
@@ -120,6 +155,7 @@ int main()
 {
     /* create System V context to house Ruby */
     ruby_context_stack_size = sizeof(ruby_context_stack);
+    memset(ruby_context_stack, 0, ruby_context_stack_size);
 
     ruby_context.uc_link          = &main_context;
     ruby_context.uc_stack.ss_sp   = ruby_context_stack;

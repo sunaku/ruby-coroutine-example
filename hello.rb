@@ -1,3 +1,4 @@
+p ARGV
 puts "~~~~> Hello World!  The time is #{Time.now}."
 
 puts "~~~~> Doing relay from #{__FILE__}:#{__LINE__}"
@@ -20,7 +21,7 @@ def recurse(n = 0)
   relay_from_ruby_to_main
   yasume
 
-  if n < 500
+  if n < 50000
     print "#{Thread.current} recursing at #{n}...\n"
     yasume
 
@@ -29,10 +30,12 @@ def recurse(n = 0)
   end
 end
 
-threads = 10.times.map do
-  Thread.new { recurse }
-end
+recurse
 
-Thread.pass while threads.any? {|t| t.alive? }
+# threads = 10.times.map do
+#   Thread.new { recurse }
+# end
+
+# Thread.pass while threads.any? {|t| t.alive? }
 
 puts 'GOOD JOB! :-)'
