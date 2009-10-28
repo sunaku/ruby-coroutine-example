@@ -12,4 +12,16 @@ p FileUtils
 include FileUtils::Verbose
 touch 'foobar'
 
+def recurse
+  relay_from_ruby_to_main
+
+  n = caller.length
+  if n < 500
+    puts "recursing at #{n}..."
+    Thread.new { recurse }.join
+  end
+end
+
+recurse
+
 puts 'GOOD JOB! :-)'
