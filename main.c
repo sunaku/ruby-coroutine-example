@@ -6,6 +6,11 @@
 #include <stdbool.h>
 #include <ruby.h>
 
+#ifdef HAVE_SYS_MMAN_H
+#include <unistd.h>
+#include <sys/mman.h>
+#endif
+
 #ifdef DEMONSTRATE_PCL
 #include <pcl.h>
 static coroutine_t ruby_coroutine;
@@ -38,6 +43,8 @@ static size_t ruby_coroutine_stack_size = DEMONSTRATION_STACK_SIZE;
 static char* ruby_coroutine_stack;
 #endif
 
+static char* ruby_coroutine_stack_start;
+static char* ruby_coroutine_stack_end;
 static bool ruby_coroutine_finished;
 
 /* puts the Ruby coroutine in control */
@@ -142,11 +149,8 @@ static void ruby_coroutine_body(
     {
 #ifdef HAVE_RUBY_BIND_STACK
         ruby_bind_stack(
-                /* lower memory address */
-                (VALUE*)(ruby_coroutine_stack),
-
-                /* upper memory address */
-                (VALUE*)(ruby_coroutine_stack + ruby_coroutine_stack_size)
+            (VALUE*)ruby_coroutine_stack_start, /* lower memory address */
+            (VALUE*)ruby_coroutine_stack_end    /* upper memory address */
         );
 #endif
 
@@ -189,19 +193,75 @@ int main()
 #endif
 
 #ifdef DEMONSTRATE_DYNAMIC
+#ifdef HAVE_SYS_MMAN_H
+    const long page_size = sysconf(_SC_PAGESIZE);
+    fprintf(stderr, "page size: %lu\n", page_size);
+
+    /* ensure that the stack size is aligned with memory page size */
+    size_t excess_page_bytes = ruby_coroutine_stack_size % page_size;
+    if (excess_page_bytes > 0) {
+        if (ruby_coroutine_stack_size > page_size) {
+            ruby_coroutine_stack_size -= excess_page_bytes;
+            fprintf(stderr, "Reduced stack by %lu bytes for page alignment\n",
+                    excess_page_bytes);
+        }
+        else {
+            ruby_coroutine_stack_size = page_size;
+            fprintf(stderr, "Grew stack to %lu bytes for page alignment\n",
+                    page_size);
+        }
+    }
+
+    /* 2 extra guard pages to prevent coroutine stack overflow */
+    ruby_coroutine_stack_size += 2 * page_size;
+#endif
+
     /* allocate the coroutine stack */
-    ruby_coroutine_stack = malloc(ruby_coroutine_stack_size);
+    ruby_coroutine_stack =
+#ifdef HAVE_SYS_MMAN_H
+        valloc
+#else
+        malloc
+#endif
+        (ruby_coroutine_stack_size);
+
     if (!ruby_coroutine_stack)
     {
-        fprintf(stderr, "Could not allocate %lu bytes!\n", ruby_coroutine_stack_size);
+        fprintf(stderr, "Could not allocate %lu bytes!\n",
+                ruby_coroutine_stack_size);
         return 1;
     }
+#endif
+
+    ruby_coroutine_stack_start = ruby_coroutine_stack;
+    ruby_coroutine_stack_end = ruby_coroutine_stack_start +
+        ruby_coroutine_stack_size - 1;
+
+#ifdef DEMONSTRATE_DYNAMIC
+#ifdef HAVE_SYS_MMAN_H
+    char* stack_start_guard = ruby_coroutine_stack_start;
+    char* stack_end_guard = ruby_coroutine_stack_end + 1 - page_size;
+
+    if (mprotect(stack_start_guard, page_size, PROT_NONE) == 0 &&
+        mprotect(stack_end_guard, page_size, PROT_NONE) == 0)
+    {
+        /* 2 pages occupied by guard pages */
+        ruby_coroutine_stack_start += page_size;
+        ruby_coroutine_stack_end -= page_size;
+        ruby_coroutine_stack_size -= 2 * page_size;
+    }
+    else
+    {
+        perror("Could not protect coroutine stack from overflow");
+        return 1;
+    }
+#endif
 #endif
 
 #ifdef DEMONSTRATE_PCL
     /* create coroutine to house Ruby */
     ruby_coroutine = co_create(ruby_coroutine_body, NULL,
-            ruby_coroutine_stack, ruby_coroutine_stack_size);
+            ruby_coroutine_stack_start, ruby_coroutine_stack_size);
 #endif
 
 #ifdef DEMONSTRATE_PTHREAD
@@ -216,9 +276,9 @@ int main()
     pthread_attr_init(&attr);
 
 #ifdef HAVE_PTHREAD_ATTR_SETSTACK
-    pthread_attr_setstack(&attr, ruby_coroutine_stack, ruby_coroutine_stack_size);
+    pthread_attr_setstack(&attr, ruby_coroutine_stack_start, ruby_coroutine_stack_size);
 #else
-    pthread_attr_setstackaddr(&attr, ruby_coroutine_stack);
+    pthread_attr_setstackaddr(&attr, ruby_coroutine_stack_start);
     pthread_attr_setstacksize(&attr, ruby_coroutine_stack_size);
 #endif
 
@@ -232,7 +292,7 @@ int main()
 #ifdef DEMONSTRATE_UCONTEXT
     /* create System V context to house Ruby */
     ruby_coroutine.uc_link          = &main_coroutine;
-    ruby_coroutine.uc_stack.ss_sp   = ruby_coroutine_stack;
+    ruby_coroutine.uc_stack.ss_sp   = ruby_coroutine_stack_start;
     ruby_coroutine.uc_stack.ss_size = ruby_coroutine_stack_size;
     getcontext(&ruby_coroutine);
     makecontext(&ruby_coroutine, (void (*)(void)) ruby_coroutine_body, 0);
@@ -246,5 +306,6 @@ int main()
     }
 
     printf("Main: Goodbye!\n");
+
     return 0;
 }

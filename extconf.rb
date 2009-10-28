@@ -1,5 +1,10 @@
 require 'mkmf'
 
+# mprotect
+have_func('valloc', 'stdlib.h') &&
+have_func('sysconf', 'unistd.h') &&
+have_header('sys/mman.h')
+
 # ruby
 have_library('ruby-static', 'ruby_init') ||
 have_library('ruby', 'ruby_init')
