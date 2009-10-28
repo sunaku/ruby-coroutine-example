@@ -12,16 +12,27 @@ p FileUtils
 include FileUtils::Verbose
 touch 'foobar'
 
-def recurse
-  relay_from_ruby_to_main
+def yasume
+  Thread.pass if rand(2) == 1
+end
 
-  n = caller.length
+def recurse(n = 0)
+  relay_from_ruby_to_main
+  yasume
+
   if n < 500
-    puts "recursing at #{n}..."
-    Thread.new { recurse }.join
+    print "#{Thread.current} recursing at #{n}...\n"
+    yasume
+
+    recurse(n + 1)
+    yasume
   end
 end
 
-recurse
+threads = 10.times.map do
+  Thread.new { recurse }
+end
+
+Thread.pass while threads.any? {|t| t.alive? }
 
 puts 'GOOD JOB! :-)'
