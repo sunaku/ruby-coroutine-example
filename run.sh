@@ -18,7 +18,7 @@ do
   # compile and run test case
   ruby -v extconf.rb &&
   sed -i 's,-shared,,g' Makefile &&
-  make && ./main.so ||
+  make && time ./main.so ||
 
   # inspect the core dump, if any
   test -f core &&
