@@ -1,0 +1,15 @@
+ruby_bind_stack() usage example - libpthread POSIX threads
+==========================================================
+
+The "output.log" file contains the result of running
+`script -c ./run.sh output.log` on my machine:
+
+    Linux 2.6.31-ARCH #1 SMP PREEMPT i686
+    Intel(R) Pentium(R) D CPU 3.00GHz
+
+The last section in "output.log" corresponds to Ruby built from
+SVN plus the "ruby_bind_stack.patch" file attached to this issue:
+
+    http://redmine.ruby-lang.org/issues/show/2294
+
+Thanks for your consideration.  I hope this helps! :-)
