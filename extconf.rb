@@ -6,7 +6,7 @@ have_library('ruby', 'ruby_init')
 have_func('ruby_sysinit')
 have_func('ruby_bind_stack')
 
-have_header('sys/ucontext.h') ||
-have_header('ucontext.h')
+have_library('pthread')
+have_func('pthread_attr_setstack')
 
 create_makefile('main')

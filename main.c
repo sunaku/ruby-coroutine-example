@@ -1,19 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-
-#ifdef HAVE_SYS_UCONTEXT_H
-#include <sys/ucontext.h>
-#endif
-
-#ifdef HAVE_CONTEXT_H
-#include <ucontext.h>
-#endif
-
+#include <pthread.h>
 #include <ruby.h>
 
-static ucontext_t main_context;
-static ucontext_t ruby_context;
+static pthread_t ruby_context;
+static pthread_mutex_t main_context_lock;
+static pthread_mutex_t ruby_context_lock;
+
 static size_t ruby_context_stack_size;
 static char ruby_context_stack[4*(1024*1024)]; // 4 MiB
 static bool ruby_context_finished;
@@ -21,14 +15,16 @@ static bool ruby_context_finished;
 static void relay_from_main_to_ruby()
 {
     printf("Relay: main => ruby\n");
-    swapcontext(&main_context, &ruby_context);
+    pthread_mutex_unlock(&ruby_context_lock);
+    pthread_mutex_lock(&main_context_lock);
     printf("Relay: main <= ruby\n");
 }
 
 static VALUE relay_from_ruby_to_main(VALUE self)
 {
     printf("Relay: ruby => main\n");
-    swapcontext(&ruby_context, &main_context);
+    pthread_mutex_unlock(&main_context_lock);
+    pthread_mutex_lock(&ruby_context_lock);
     printf("Relay: ruby <= main\n");
     return Qnil;
 }
@@ -62,8 +58,12 @@ static VALUE ruby_context_body_require(const char* file)
     return result;
 }
 
-static void ruby_context_body()
+static void ruby_context_body(void* dummy)
 {
+    printf("Context: waiting for initial asynchronous relay from main\n");
+
+    relay_from_ruby_to_main(Qnil);
+
     printf("Context: begin\n");
 
     int i;
@@ -110,6 +110,8 @@ static void ruby_context_body()
 
     ruby_context_finished = true;
     relay_from_ruby_to_main(Qnil);
+
+    pthread_exit(NULL);
 }
 
 #ifdef RUBY_GLOBAL_SETUP
@@ -118,14 +120,30 @@ RUBY_GLOBAL_SETUP
 
 int main()
 {
-    /* create System V context to house Ruby */
+    /* initialize the relay mechanism */
+    pthread_mutex_init(&ruby_context_lock, NULL);
+    pthread_mutex_lock(&ruby_context_lock);
+    pthread_mutex_init(&main_context_lock, NULL);
+    pthread_mutex_lock(&main_context_lock);
+
+    /* create pthread to house Ruby */
     ruby_context_stack_size = sizeof(ruby_context_stack);
 
-    ruby_context.uc_link          = &main_context;
-    ruby_context.uc_stack.ss_sp   = ruby_context_stack;
-    ruby_context.uc_stack.ss_size = ruby_context_stack_size;
-    getcontext(&ruby_context);
-    makecontext(&ruby_context, (void (*)(void)) ruby_context_body, 0);
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+
+    #ifdef HAVE_PTHREAD_ATTR_SETSTACK
+        pthread_attr_setstack(&attr, ruby_context_stack, ruby_context_stack_size);
+    #else
+        pthread_attr_setstackaddr(&attr, ruby_context_stack);
+        pthread_attr_setstacksize(&attr, ruby_context_stack_size);
+    #endif
+
+    int error = pthread_create(&ruby_context, &attr, &ruby_context_body, NULL);
+    if (error) {
+        printf("ERROR: pthread_create() returned %d\n", error);
+        return 1;
+    }
 
     /* relay control to Ruby until it is finished */
     ruby_context_finished = false;
