@@ -20,20 +20,20 @@ coroutine=$(echo "$1" | tr 'a-z' 'A-Z'); shift
 allocation=$(echo "$1" | tr 'a-z' 'A-Z'); shift
 
 for prefix in "$@"; do
+  # use the Ruby installed at $prefix
+  old_path=$PATH
+  export PATH=$prefix:$prefix/bin:$PATH
+
   echo
   echo "###############################################################"
-  echo "# $( "$prefix"/bin/ruby -v )"
+  echo "# $( ruby -v )"
   echo "# coroutine library: $coroutine"
   echo "# coroutine stack allocation: $allocation"
   echo "###############################################################"
   echo
 
-  # use the Ruby installed at $prefix
-  old_path=$PATH
-  export PATH=$prefix/bin:$PATH
-
   # compile and run test case
-  ruby -v extconf.rb &&
+  ruby extconf.rb &&
   sed -i 's/-shared//g' Makefile &&
   sed -i "s/^CPPFLAGS =/& -DDEMONSTRATE_$coroutine -DDEMONSTRATE_$allocation/" Makefile &&
   make && time ./main.so ||
