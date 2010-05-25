@@ -1,19 +1,17 @@
 #!/bin/sh
+# Usage: sh run.sh DIRECTORIES_WHERE_RUBIES_ARE_INSTALLED
 
 # enable core dumping
 ulimit -c unlimited
 
-for dir in ~/.multiruby/install/*
-do
-  ver=$(basename "$dir")
-
+for prefix in "$@"; do
   echo
   echo "###############################################################"
-  echo "# $( "$dir"/bin/ruby -v )"
+  echo "# $( "$prefix"/bin/ruby -v )"
   echo "###############################################################"
   echo
 
-  export PATH=$dir/bin:$PATH
+  export PATH=$prefix/bin:$PATH
 
   # compile and run test case
   ruby -v extconf.rb &&
@@ -29,4 +27,3 @@ do
   rm -f $$
   make distclean
 done
-
