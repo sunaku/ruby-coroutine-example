@@ -1,15 +1,20 @@
-ruby_bind_stack() usage example - libpthread POSIX threads
-==========================================================
+This example shows how to embed Ruby using different C coroutine libraries:
 
-The "output.log" file contains the result of running
-`script -c ./run.sh output.log` on my machine:
+* libpcl    http://www.xmailserver.org/libpcl.html
+* pthread   https://computing.llnl.gov/tutorials/pthreads/
+* ucontext  http://www.gnu.org/s/libc/manual/html_node/System-V-contexts.html
 
-    Linux 2.6.31-ARCH #1 SMP PREEMPT i686
-    Intel(R) Pentium(R) D CPU 3.00GHz
+And also using different stack allocation methods:
 
-The last section in "output.log" corresponds to Ruby built from
-SVN plus the "ruby_bind_stack.patch" file attached to this issue:
+* static    The coroutine stack is baked into the shared object file.
+* dynamic   The coroutine stack is allocated dynamically, at runtime.
+
+And using my ruby_bind_stack() patch for Ruby, if present:
 
     http://redmine.ruby-lang.org/issues/show/2294
 
-Thanks for your consideration.  I hope this helps! :-)
+To run this example, use the provided `run.sh` script:
+
+    sh run.sh   # displays usage info
+
+I hope this helps you learn how to embed Ruby inside C coroutines.  Enjoy!
