@@ -17,4 +17,13 @@ To run this example, use the provided `run.sh` script:
 
     sh run.sh   # displays usage info
 
+    sh run.sh pcl static ~/.rvm/rubies/*
+    sh run.sh pcl dynamic ~/.rvm/rubies/*
+
+    sh run.sh pthread static ~/.rvm/rubies/*
+    sh run.sh pthread dynamic ~/.rvm/rubies/*
+
+    sh run.sh ucontext static ~/.rvm/rubies/*
+    sh run.sh ucontext dynamic ~/.rvm/rubies/*
+
 I hope this helps you learn how to embed Ruby inside C coroutines.  Enjoy!
