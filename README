@@ -4,14 +4,20 @@ This example shows how to embed Ruby using different C coroutine libraries:
 * pthread   https://computing.llnl.gov/tutorials/pthreads/
 * ucontext  http://www.gnu.org/s/libc/manual/html_node/System-V-contexts.html
 
-And also using different stack allocation methods:
+That are initialized using two distinct stack allocation methods:
 
 * static    The coroutine stack is baked into the shared object file.
 * dynamic   The coroutine stack is allocated dynamically, at runtime.
 
-And using my ruby_bind_stack() patch for Ruby, if present:
+And optionally using my ruby_bind_stack() patch for Ruby 1.9.x, if present:
 
-    http://redmine.ruby-lang.org/issues/show/2294
+* https://github.com/sunaku/ruby/compare/trunk...2294_bind_stack.patch
+
+* http://bugs.ruby-lang.org/issues/show/2294
+
+******************************************************************************
+*   NOTE: Without the above patch, this example WILL FAIL for Ruby 1.9.x!    *
+******************************************************************************
 
 To run this example, use the provided `run.sh` script:
 
